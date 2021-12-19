@@ -26,6 +26,32 @@
 # 341 16 "hvn" STEAM_1:1:1884053 06:20 78 0 active 256000
 # 316 19 "Whiteshadow" STEAM_1:0:100680324 15:18 47 0 active 196608
 
+
+# userid name uniqueid connected ping loss state rate
+#  3 2 "Spxzxf" STEAM_1:0:600422902 34:11 46 0 active 196608
+# 15 3 "OnionChan" STEAM_1:1:505895895 02:22 88 0 active 196608
+# 16 4 "TheLadyLuna" STEAM_1:0:440350032 00:47 108 0 active 786432
+#  7 6 "Enemy Purple" STEAM_1:1:126461176 34:11 72 0 active 196608
+#  8 7 "phantom" STEAM_1:0:96206274 34:11 47 0 active 196608
+#  9 8 "drizzzii" STEAM_1:0:178799967 34:11 46 4 active 196608
+# 12 11 "Uninstalling" STEAM_1:0:505470373 34:10 80 0 active 196608
+# 13 12 "OneTap" STEAM_1:0:473258282 34:10 93 0 active 786432
+# 14 13 ".IceBear" STEAM_1:0:236322580 34:10 138 0 active 786432
+
+teams: 
+    1.
+        OnionChan       15, 3
+        Enemy Purple    7 , 6
+        Uninstalling    12, 11
+        drizzzii        9 , 8 
+        Spxzxf          3 , 2 
+    2.
+        TheLadyLuna     16, 4
+        phantom         8 , 7 
+        IceBear         14, 13
+        OneTap          13, 12
+// 2 : SP
+
 // split by ' ' find the ones that contains ("STEAM") using this we can understand their stats, first we must convert to steam 64 I think... lets check
 */
 
