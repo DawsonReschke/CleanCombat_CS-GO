@@ -55,10 +55,15 @@ teams:
 // split by ' ' find the ones that contains ("STEAM") using this we can understand their stats, first we must convert to steam 64 I think... lets check
 */
 
-import fetch from "node-fetch";
+import fetch from "node-fetch"
+import dotenv from 'dotenv'
+// dotenv.config({path: '/Users/dawson/workspace/git/CSpredictor/server/test/.env'})
+dotenv.config({ path: process.cwd() + '/config/config.env' });
 const steamConvertTo64Int = 76561197960265728n
 const steamID = 'STEAM_1:1:126461176'
-const key = 'FE57479D48DDA7694ABA7FC43ECC83E8'
+const key = process.env.STEAMAPIKEY;
+console.log(key);
+console.log(process.cwd());
 let uData;
 let userSteamLevel;
 let userStats; 
@@ -201,6 +206,11 @@ function steamIdToSteam64(str){
     return steam64ID; 
 }
 
+
+function getGoodString(str){
+    str = str.replaceAll('"',' ')
+    return str; 
+}
 
 getUserData(steamID);
 getUserStatsFromGame(steamID);

@@ -1,6 +1,10 @@
 <template>
+<div>
   <img alt="Vue logo" src="./assets/logo.png">
   <Table :players="players"/>
+  <textarea v-model="value"> </textarea>
+  <button @click="logValue"> click </button>
+</div>
 </template>
 
 <script>
@@ -9,6 +13,7 @@ export default {
   name: 'App',
   data(){
     return{
+      value: "",
       players: [
           {
                 playerName: 'dawson',
@@ -27,6 +32,12 @@ export default {
                 steamLink: 'fjakd', 
           },
       ]
+    }
+  },
+  methods:{
+    logValue: function (){
+      // console.log(this.value);
+      console.log(String.raw`${this.value}`); 
     }
   },
   components: {
