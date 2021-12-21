@@ -98,7 +98,7 @@ response: {
 }
 */
 
- async function getUserData (steamid){
+function getUserData (steamid){
     const URL = 'https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2'
     let temp = fetch(`${URL}/?key=${key}&steamids=${steamIdToSteam64(steamid)}`).then(response => response.json()).then(data => uData = data['response']['players'][0]).catch(error => uData = 'error');
     //USEFULL DATA: avatar, date created, communityvisibilitystate
@@ -206,7 +206,7 @@ function steamIdToSteam64(str){
     return steam64ID; 
 }
 
-
+console.log(getGoodString('#  3 2 "Spxzxf" STEAM_1:0:600422902 34:11 46 0 active 196608# 15 3 "OnionChan" STEAM_1:1:505895895 02:22 88 0 active 196608# 16 4 "TheLadyLuna" STEAM_1:0:440350032 00:47 108 0 active 786432#  7 6 "Enemy Purple" STEAM_1:1:126461176 34:11 72 0 active 196608#  8 7 "phantom" STEAM_1:0:96206274 34:11 47 0 active 196608#  9 8 "drizzzii" STEAM_1:0:178799967 34:11 46 4 active 196608 12 11 "Uninstalling" STEAM_1:0:505470373 34:10 80 0 active 196608# 13 12 "OneTap" STEAM_1:0:473258282 34:10 93 0 active 786432# 14 13 ".IceBear" STEAM_1:0:236322580 34:10 138 0 active 786432'))
 function getGoodString(str){
     str = str.replaceAll('"',' ')
     return str; 
@@ -222,6 +222,6 @@ setTimeout(() => {
     console.log(JSON.stringify(userSteamLevel,null,4)); 
     console.log(JSON.stringify(userBanRecord,null,4)); 
     console.log(JSON.stringify(userGamesOwnedData,null,4));
-    console.log(JSON.stringify(userStats['playerstats']['achievements'].length));
-    console.log(JSON.stringify(userStats['playerstats']['stats'].length));
+    console.log(JSON.stringify(userStats['playerstats']['achievements']));
+    console.log(JSON.stringify(userStats['playerstats']['stats']));
 }, 1000);
