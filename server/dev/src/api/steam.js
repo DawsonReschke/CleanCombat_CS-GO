@@ -1,7 +1,7 @@
 const express = require('express');
 require('dotenv').config();
 const XMLHttpRequest  = require('xhr2')
-
+let payload = {};
 const router = express.Router();
 const key = process.env.KEY; 
 router.post('/', async (req, res,next) => {
@@ -12,10 +12,9 @@ router.post('/', async (req, res,next) => {
         let steam64IDs = steamIDs.map(id =>{
             return String(steamIDtosteam64(id)); 
         })
-        let temp = await handleSteamAPICalls(steam64IDs); 
-        console.log(temp); // output looks correct :: this even returns first. how is it going back intime it doesnt make sense.
-        console.log(JSON.stringify(temp,null,4)) // empty players [] within object... why? 
-        res.json(temp)
+        initializePayload(steam64IDs);
+        await handleSteamAPICalls(steam64IDs); 
+        res.json(payload); 
     }catch(error){
         next(error); 
     }
@@ -28,13 +27,6 @@ router.get('/', async(req,res,next)=>{
         next(error); 
     }
 })
-
-
-function resetPayload(){
-    payload = {
-        gotUserData:false,
-    }
-}
 
 // responseFormat : example: {something that you want to parse:{}}
 //response:{players:[]}; 
@@ -59,54 +51,90 @@ function createRequest(url){
     })
 }
 
+function initializePayload(steamids){
+    payload = {}
+    steamids.forEach((val)=>{
+        payload[val] = {
+            'owned_game_data' : {},
+            'user_data' : {},
+            'steam_level': 0,
+            'user_ban_record':{},
+            'user_game_stats':{},
+        }; 
+    })
+}
+
 // handler function for doing all api calls...
 async function handleSteamAPICalls(steamids){
-    const payload = {'players':[]}
-    payload = await getUsersStatsFromGame(steamids,payload); 
-    return payload; 
+    await getUsersStatsFromGame(steamids);
+    await getUsersData(steamids); 
+    await getUsersSteamLevel(steamids); 
+    await getUsersHoursPlayed(steamids); 
+    await getUsersBanRecord(steamids)
     // this method calls each api in order each after the last has completed...
 }
 
-async function getUserData (steamids,payload){
+async function getUsersStatsFromGame(steamids){
+    for(let i = 0; i < steamids.length; i++){
+            payload[steamids[i]]['user_game_stats'] = await getUserStatsFromGame(steamids[i]); 
+    }
+}
+
+async function getUsersHoursPlayed(steamids){
+    for(let i = 0; i < steamids.length; i++){
+        if(!payload[steamids[i]]){payload[steamids[i]]={}}
+        payload[steamids[i]]['owned_game_data'] = await getUserHoursPlayed(steamids[i]); 
+    }
+}
+
+async function getUsersBanRecord(steamids){
+    let arr = await getUserBanRecord(steamids); 
+    arr.forEach((val)=>{
+        let ID = val['SteamId']
+        delete val['SteamId']
+        payload[ID]['user_ban_record'] = val; 
+    })
+}
+
+async function getUsersData (steamids){
     const URL = `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${key}&&steamids=${steamids}`
     const steamUsersData = await createRequest(URL); 
     parseUserData(steamUsersData,payload); 
 }
 
+async function getUsersSteamLevel(steamids){
+    for(let i = 0; i < steamids.length; i++){
+        if(!payload[steamids[i]]){payload[steamids[i]]={}}
+        payload[steamids[i]]['steam_level'] = {}
+        payload[steamids[i]]['steam_level'] = await getUserSteamLevel(steamids[i])
+    }
+}
+
 function parseUserData(response){
-    const keysToRemove = ['personaname','lastlogoff','commentpermission','avatarmedium','avatarfull','avatarhash','personastate','realname','primaryclanid','personastateflags','loccountrycode','locstatecode','loccityid']
+    const keysToRemove = ['lastlogoff','commentpermission','avatarmedium','avatarfull','avatarhash','personastate','realname','primaryclanid','personastateflags','loccountrycode','locstatecode','loccityid']
     const SteamResponsePlayerArray = response['response']['players']; 
     SteamResponsePlayerArray.forEach((userSummaryData)=>{
         for(let i = 0; i< keysToRemove.length; i++){
             delete userSummaryData[keysToRemove[i]]
         }
         let userSteamID = userSummaryData['steamid']; 
-        payload['players'][getPayloadIndexFromSteamid(userSteamID)] = userSummaryData; 
+        delete userSummaryData['steamid']
+        if(!payload[String(userSteamID)]){
+            payload[String(userSteamID)] = {};
+        }
+        payload[String(userSteamID)]['user_data'] = userSummaryData; 
     })
 }
 
-
-async function getUsersStatsFromGame(steamids,payload){
-    const userStats = []; 
-    for(let i = 0; i < steamids.length;i++){
-        userStats.push(await getUserStatsFromGame(steamids[i],payload));
-    }
-    console.log(userStats); 
-    return payload;
-}
-
-async function getUserStatsFromGame(steamid,payload){
+async function getUserStatsFromGame(steamid){
     const URL = 'https://api.steampowered.com/ISteamUserStats/GetUserStatsForGame/v2/'
     const appID = '000730'
     const steamUserStatsFromGameResponse = await createRequest(`${URL}/?key=${key}&steamid=${(steamid)}&appid=${appID}`)
-    console.log(payload); 
-    console.log(payload); 
-
-    payload = parseUserStatsFromGame(steamUserStatsFromGameResponse,payload); 
-    return payload; 
+    const parsedJSON = parseUserStatsFromGame(steamUserStatsFromGameResponse); 
+    return parsedJSON; 
 }
 
-function parseUserStatsFromGame(userStatsFromGame,payload){
+function parseUserStatsFromGame(userStatsFromGame){
     const keys = (Object.keys(userStatsFromGame))
     if(keys.includes('status')){
         return; 
@@ -115,12 +143,12 @@ function parseUserStatsFromGame(userStatsFromGame,payload){
     const achievmentCount = parseAchievments(userStatsFromGame);
     const lastMatchData = parseLastMatch(userStatsFromGame); 
     const generalMatchData = parseGeneralMatchData(userStatsFromGame); 
-    payload['players'][steamid] ={
+    const parsedUserStats = {
         'achievment_count': achievmentCount,
         'last_match_data': lastMatchData,
         'general_stats': generalMatchData,
     }
-    return payload; 
+    return parsedUserStats; 
 }
 
 function parseAchievments(ach){
@@ -178,29 +206,44 @@ function getStatIndex(statsList,name){
 }
 
 
-function getUserBanRecord(steamids){ // only call once with all steam ids 
+async function getUserBanRecord(steamids){ // only call once with all steam ids 
     const URL = 'https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/'
-    let temp = fetch(`${URL}?key=${key}&steamids=${(steamids)}`).then(response => response.json()).then(data => userBanRecord = data); 
+    let response = await createRequest(`${URL}?key=${key}&steamids=${(steamids)}`);
+    return parseUserBanRecord(response); 
 }
 
-function getUserSteamLevel(steamid){
+function parseUserBanRecord(res){
+    return res['players']; 
+}
+
+async function getUserSteamLevel(steamid){
     const URL = 'https://api.steampowered.com/IPlayerService/GetSteamLevel/v1/'
-    let temp = fetch(`${URL}?key=${key}&steamid=${(steamid)}`).then(response => response.json()).then(data => userSteamLevel = data['response']); 
+    const response = await createRequest(`${URL}?key=${key}&steamid=${(steamid)}`)
+    return parseUserSteamLevel(response); 
 }
 
-function getUserHoursPlayed(steamid){
+function parseUserSteamLevel(res){
+    return res['response']['player_level']
+}
+
+async function getUserHoursPlayed(steamid){
     const URL = 'https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/'
-    let temp = fetch(`${URL}?key=${key}&steamid=${(steamid)}&include_appinfo=false&include_played_free_games=true&appids_filter=000730`).then(response => response.json()).then(data => userGamesOwnedData = data['response']['games'].filter((val) => {
-        return val['appid'] == 730; 
-    })); 
+    const response = await createRequest(`${URL}?key=${key}&steamid=${(steamid)}&include_appinfo=false&include_played_free_games=true`);
+    return parseHoursPlayed(response); 
 }
 
-function getSteamIDs(){
-    let allIDs = []
-    payload['players'].forEach(item => {
-        allIDs.push(`${item.steamid}`);
-    });
-    return allIDs; 
+function parseHoursPlayed(res){
+    const userGamesOwned = res['response']['game_count'];
+    if(res['response']['games']){
+        const userCSGOPlayTime = res['response']['games'].filter((val)=>{
+            return val['appid'] == 730; 
+        })
+        return {
+            'games_owned':userGamesOwned,
+            'play_time': userCSGOPlayTime[0]["playtime_forever"],
+        }
+    }
+    return {}
 }
 
 function parseSteamIDs(str){
