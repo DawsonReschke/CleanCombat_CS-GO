@@ -1,18 +1,20 @@
 const express = require('express');
 require('dotenv').config();
 const XMLHttpRequest  = require('xhr2')
+const { MongoClient,ObjectId } = require('mongodb');
 let payload = {};
 const router = express.Router();
 const key = process.env.KEY; 
+
 router.post('/', async (req, res,next) => {
     try{
         const {body} = req; 
         const {message} = body; 
+        console.log('post'); 
         const steamIDs = parseSteamIDs(message); 
         let steam64IDs = steamIDs.map(id =>{
             return String(steamIDtosteam64(id)); 
         })
-        initializePayload(steam64IDs);
         await handleSteamAPICalls(steam64IDs); 
         res.json(payload); 
     }catch(error){
@@ -51,6 +53,89 @@ function createRequest(url){
     })
 }
 
+async function Query_DB_By_SteamId(steamid,callBack){
+    const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect(async (err) => {
+        const collection = client.db("cheaterDB").collection("players");        // perform actions on the collection object
+        callBack(await collection.findOne({_id:steamid}));
+        client.close();
+      });
+}
+
+async function Insert_All_Steam_Users_From_Payload(payload){
+    let keys = Object.keys(payload);
+    let playerArrayForInsertion = []
+    keys.forEach((key)=>{
+        playerArrayForInsertion.push({_id : key, 'Steam_Data': payload[key]})
+    })
+    const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect(async (err) => {
+        const collection = client.db("cheaterDB").collection("players");
+        for(let i = 0; i < playerArrayForInsertion.length;i++){
+            const currentObject = playerArrayForInsertion[i]
+            const inserted = await collection.updateOne({_id:playerArrayForInsertion[i]._id},{$set:currentObject},{upsert:true}); 
+        }
+        client.close();
+      }); 
+}
+
+async function Delete_All_entries_From_Database(){
+    const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect(async (err) => {
+        const collection = client.db("cheaterDB").collection("players");
+        const deleted = await collection.deleteMany({}); 
+        client.close();
+      }); 
+}
+
+
+async function Get_Vac_Banned_Players_Steamids(callBack){
+    const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect(async (err) => {
+        const ids = []; 
+        const collection = client.db("cheaterDB").collection("players");
+        await collection.find({"Steam_Data.user_vac_ban":true}).project({"Steam_Data":0}).forEach((val)=>{
+            ids.push(val._id); 
+        })
+        callBack(ids); 
+        client.close();
+      });
+}
+
+async function Get_All_Ids_From_Database(callBack){
+    const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect(async (err) => {
+        const collection = client.db("cheaterDB").collection("players");
+        const ids = []
+        await collection.find({}).project({"Steam_Data":0}).forEach((val)=>{
+            ids.push(val._id); 
+        })
+        callBack(ids); 
+        client.close();
+      });
+}
+
+async function Update_All_Users(steamids){
+    const numOfArrays = Math.ceil(steamids.length/100)
+    console.log(numOfArrays); 
+    for(let i = 0; i < numOfArrays; i++){
+        const steamIdsToHundred = steamids.splice(i*100,(i+1) * 100)
+        await handleSteamAPICalls(steamIdsToHundred)
+        await Insert_All_Steam_Users_From_Payload(payload); 
+    }
+}
+
+async function handleSteamAPICalls(steamids){
+    initializePayload(steamids); 
+    await getUsersStatsFromGame(steamids);
+    await getUsersData(steamids); 
+    await getUsersSteamLevel(steamids); 
+    await getUsersHoursPlayed(steamids); 
+    await getUsersBanRecord(steamids)
+    console.log('done executing steam api calls'); 
+    // this method calls each api in order each after the last has completed...
+}
+
 function initializePayload(steamids){
     payload = {}
     steamids.forEach((val)=>{
@@ -58,20 +143,11 @@ function initializePayload(steamids){
             'owned_game_data' : {},
             'user_data' : {},
             'steam_level': 0,
+            'user_vac_ban':{},
             'user_ban_record':{},
             'user_game_stats':{},
         }; 
     })
-}
-
-// handler function for doing all api calls...
-async function handleSteamAPICalls(steamids){
-    await getUsersStatsFromGame(steamids);
-    await getUsersData(steamids); 
-    await getUsersSteamLevel(steamids); 
-    await getUsersHoursPlayed(steamids); 
-    await getUsersBanRecord(steamids)
-    // this method calls each api in order each after the last has completed...
 }
 
 async function getUsersStatsFromGame(steamids){
@@ -92,6 +168,9 @@ async function getUsersBanRecord(steamids){
     arr.forEach((val)=>{
         let ID = val['SteamId']
         delete val['SteamId']
+        let isVacBanned = val.VACBanned;
+        delete val.VACBanned; 
+        payload[ID]['user_vac_ban'] = isVacBanned; 
         payload[ID]['user_ban_record'] = val; 
     })
 }
@@ -155,9 +234,11 @@ function parseAchievments(ach){
     const achievmentCount = Object.keys(ach['playerstats']['achievements']).length;
     return achievmentCount; 
 }
+
 function parseSteamidFromUserStats(userStatsFromGame){
     return userStatsFromGame['playerstats']['steamID'];
 }
+
 function parseLastMatch(userStatsFromGame){
     const lastMatchData = {}; 
     Object.keys(userStatsFromGame['playerstats']['stats']).forEach((userStat)=>{
@@ -205,10 +286,11 @@ function getStatIndex(statsList,name){
     return statIndex; 
 }
 
-
 async function getUserBanRecord(steamids){ // only call once with all steam ids 
+    // const maxsteamids = 
+    const maxSteamids = 100; 
     const URL = 'https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/'
-    let response = await createRequest(`${URL}?key=${key}&steamids=${(steamids)}`);
+    let response = await createRequest(`${URL}?key=${key}&steamids=${(steamids.slice(0,100))}`);
     return parseUserBanRecord(response); 
 }
 
@@ -269,16 +351,19 @@ function steamIDtosteam64(steamid){
     step 2: 
         using the steam64ids call each steam api and fill the payload: 
             FORMAT:
-                players: {
-                    {
-                        steamid: String, // users steamid 
-                        userName: String,// users display name
-                        avatar: String,  // users profile picture
-                        HS: Number,      // users headshot percentage :: 0 - 100 
-                        WL: Number,      // users win loss ratio      :: 0 - 100
-                        cheaterNumber: number, // how likely the user is cheating :: 0 - 20?
-                    }
+            [UsersSteamID]:
+                {
+                    'owned_game_data' : {},
+                    'user_data' : {},
+                    'steam_level': 0,
+                    'user_vac_ban':{},
+                    'user_ban_record':{},
+                    'user_game_stats':{},
                 }
+    step 3: 
+        Insert / update players in the database
+    step 4: 
+        res.json(payload)
 */
-
+ 
 module.exports = router;
