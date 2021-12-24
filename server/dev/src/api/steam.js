@@ -10,12 +10,13 @@ router.post('/', async (req, res,next) => {
     try{
         const {body} = req; 
         const {message} = body; 
-        console.log('post'); 
+        let steam64IDs=[]; 
         const steamIDs = parseSteamIDs(message); 
-        let steam64IDs = steamIDs.map(id =>{
-            return String(steamIDtosteam64(id)); 
-        })
+             steam64IDs = steamIDs.map(id =>{
+                return String(steamIDtosteam64(id)); 
+            })
         await handleSteamAPICalls(steam64IDs); 
+        await Insert_All_Steam_Users_From_Payload(payload);
         res.json(payload); 
     }catch(error){
         next(error); 
@@ -26,6 +27,19 @@ router.get('/', async(req,res,next)=>{
         const {body} = req; 
         res.json(body); 
     } catch (error) {
+        next(error); 
+    }
+})
+router.delete('/',async(req,res,next)=>{
+    try{
+        const {auth} = req.query; 
+        if(auth == process.env.AUTH_TOKEN){
+            await Get_All_Ids_From_Database(Update_All_Users);
+            res.json({"message":"success"}); 
+        }else{
+            res.json({"message":"access denied"})
+        }
+    }catch(error){
         next(error); 
     }
 })
@@ -53,13 +67,19 @@ function createRequest(url){
     })
 }
 
-async function Query_DB_By_SteamId(steamid,callBack){
+async function Query_Database(params,findOne,callBack,projection){
     const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
     await client.connect(async (err) => {
-        const collection = client.db("cheaterDB").collection("players");        // perform actions on the collection object
-        callBack(await collection.findOne({_id:steamid}));
+        const collection = client.db("cheaterDB").collection("players");  
+        const entries = []
+        findOne ? entries.push(await collection.findOne(params)).project(projection) : await collection.find(params).project(projection).forEach((val)=>{entries.push(val._id)})
+        callBack(findOne ? entries[0] :entries);      
         client.close();
       });
+}
+
+async function Query_DB_By_SteamId(steamid,callBack){
+    await Query_Database({_id:steamid},true,callBack)
 }
 
 async function Insert_All_Steam_Users_From_Payload(payload){
@@ -90,29 +110,11 @@ async function Delete_All_entries_From_Database(){
 
 
 async function Get_Vac_Banned_Players_Steamids(callBack){
-    const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-    await client.connect(async (err) => {
-        const ids = []; 
-        const collection = client.db("cheaterDB").collection("players");
-        await collection.find({"Steam_Data.user_vac_ban":true}).project({"Steam_Data":0}).forEach((val)=>{
-            ids.push(val._id); 
-        })
-        callBack(ids); 
-        client.close();
-      });
+    await(Query_Database({"Steam_Data.user_vac_ban":false},false,callBack,{"Steam_Data":0}))
 }
 
 async function Get_All_Ids_From_Database(callBack){
-    const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-    await client.connect(async (err) => {
-        const collection = client.db("cheaterDB").collection("players");
-        const ids = []
-        await collection.find({}).project({"Steam_Data":0}).forEach((val)=>{
-            ids.push(val._id); 
-        })
-        callBack(ids); 
-        client.close();
-      });
+    await Query_Database({},false,callBack,{"Steam_Data":0})
 }
 
 async function Update_All_Users(steamids){
@@ -305,18 +307,22 @@ async function getUserSteamLevel(steamid){
 }
 
 function parseUserSteamLevel(res){
-    return res['response']['player_level']
+    if(res['response']){
+        return res['response']['player_level']
+    }
+    return {}; 
 }
 
 async function getUserHoursPlayed(steamid){
     const URL = 'https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/'
-    const response = await createRequest(`${URL}?key=${key}&steamid=${(steamid)}&include_appinfo=false&include_played_free_games=true`);
+    console.log(steamid)
+    const response = await createRequest(`${URL}?key=${key}&steamid=${BigInt(steamid)}&include_appinfo=false&include_played_free_games=true`);
     return parseHoursPlayed(response); 
 }
 
 function parseHoursPlayed(res){
-    const userGamesOwned = res['response']['game_count'];
     if(res['response']['games']){
+        const userGamesOwned = res['response']['game_count'];
         const userCSGOPlayTime = res['response']['games'].filter((val)=>{
             return val['appid'] == 730; 
         })
@@ -343,7 +349,7 @@ function steamIDtosteam64(steamid){
     return (BigInt(y) * 2n) + BigInt(x) + 76561197960265728n;
 }
 
-
+module.exports = router;
 /*
     step 1 on POST: 
         parse the large string into the steamids,
@@ -365,5 +371,3 @@ function steamIDtosteam64(steamid){
     step 4: 
         res.json(payload)
 */
- 
-module.exports = router;
