@@ -78,12 +78,20 @@ Using MAD to calculate zscore is very similar to STD:
 	zscore = (point - median) / MAD		// again scores higher than 2.5/3 would be considered anomalies
 ```
 Earlier I mentioned robustness of an estimator, let's look at the robustness of this estimator:   
-
+```
 consider the set x = [10.1, 10.2, 10.3, 100.4]    
 median = 10.25 			// (10.2 + 10.3) / 2   
 absoluteDeviations = [0.05, 0.05, 0.15, 90.15]  
 MAD = 1.4862 * ((0.05 + 0.15)/2) = 0.14862   
-
+```
 To keep it short the anomaly gives us a zscore of 600, slightly higher than our threshold of 3.   
 
-Using a median-based estimator is significantly more robust, in fact around 50% of the data would have to be anomalies to skew the estimator falsely. 
+Using a median-based estimator is significantly more robust, in fact around 50% of the data would have to be anomalies to skew the estimator falsely.    
+
+One thing to note is that in the code examples above I said that the median = x[x.len/2] this is not correct:   
+```
+if(x.len is odd): 
+	median = x[x.len/2]
+if(x.len is even):
+	median = 1/2 * (x[x.len/2] + x[x.len/2 - 1])
+```
