@@ -1,12 +1,12 @@
 # Cheater_Detector
 I enjoy playing Counter-strike (CS), but playing against cheaters can be really demotivating. To counteract this I have 
 created a cheater detector for CS by using the [Steam Web API](https://partner.steamgames.com/doc/webapi_overview). I 
-have also created a front-end application to interface with this, see the [repo here](https://github.com/DawsonReschke/Cheater_detector_Client).
+have also created a front-end application to interface with this api, see the [repo here](https://github.com/DawsonReschke/Cheater_detector_Client).
 This program works by obtaining a large set of data from the Steam Web API and storing it in a database for later 
 analysis. I compare each player using non-biased techniques, to determine how likely it is that a given player is cheating. 
    
-Calculating cheater probability:   
-	My initial idea for anomaly detection was to look at each player within a single lobby of players
+## Calculating cheater probability:   
+My initial idea for anomaly detection was to look at each player within a single lobby of players
 (10 players), compare each of their stats to the mean stats of that lobby, and if any player were significantly better
 (determined by hardcoded threshold), I would then consider that specific statistic an anomaly. 
 	The aforementioned estimator is obviously flawed. One issue that was holding me back was the inability to compare
