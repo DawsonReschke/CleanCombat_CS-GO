@@ -1,4 +1,4 @@
-# Cheater_Detector
+# CleanCombat CS:GO
 I enjoy playing Counter-strike (CS), but playing against cheaters can be really demotivating. To counteract this I have 
 created a cheater detector for CS by using the [Steam Web API](https://partner.steamgames.com/doc/webapi_overview). I 
 have also created a front-end application to interface with this api, see the [repo here](https://github.com/DawsonReschke/Cheater_detector_Client).
