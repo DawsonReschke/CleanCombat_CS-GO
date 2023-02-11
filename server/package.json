@@ -1,19 +1,17 @@
 {
-  "name": "express-api-starter",
-  "version": "1.2.0",
-  "description": " A basic starter for an express.js API",
-  "main": "index.js",
+  "name": "cleancombat_cs_go",
+  "version": "1.1.0",
+  "description": "store and view information regarding player legitimacy in CounterStrike: Global Offensive",
+  "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "lint": "eslint --fix src",
-    "test": "mocha --exit"
+    "nodemon": "nodemon src/index.js"
   },
   "keywords": [],
-  "author": "CJ R. <cj@null.computer> (https://w3cj.now.sh)",
+  "author": "Dawson Reschke",
   "repository": {
     "type": "git",
-    "url": "https://github.com/w3cj/express-api-starter.git"
+    "url": "https://github.com/DawsonReschke/CleanCombat_CS-GO"
   },
   "license": "MIT",
   "dependencies": {
