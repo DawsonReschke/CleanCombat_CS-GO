@@ -1,16 +1,34 @@
 /*
     --> Dawson Reschke <--
-    This application finds and returns steam user data, aswell as storing the data, and finding statistical probability of a givin player cheating.... 
+    This application finds and returns steam user data, as well as storing the data, and finding statistical probability of a givin player cheating.... 
+*/
+
+/** 
+ * @todo Over arching notes: 
+ * We should separate the database with the api in the file system (something like /api_route & /api_model) 
+ * also creating a connection function that will return a connected object we can act on directly stored in (example: /cwd/data/dbConfig.js)
 */
 
 
+/** 
+ * @todo ensure we are using the write imports 
+ * I am unsure about xhr2 I think there are better xhr request libraries to use
+ * Remove unused vars
+ * should we use a global variable for the payload? NO that is not the way we should be going about this:
+ *      - we should have an object that we pass though out the chain of functions which can all edit the object  
+*/
 const express = require('express');
 require('dotenv').config();
 const XMLHttpRequest  = require('xhr2')
-const { MongoClient,ObjectId } = require('mongodb');
+const { MongoClient,ObjectId, TopologyDescriptionChangedEvent } = require('mongodb');
 let payload = {};
 const router = express.Router();
 const key = process.env.KEY; 
+
+
+/** 
+ * @todo Remove this route 
+*/
 router.put('/',async(req,res,next)=>{
     try {
         
@@ -19,6 +37,32 @@ router.put('/',async(req,res,next)=>{
         
     }
 })
+
+
+/** 
+ * @todo Document this route 
+ * This route could be a get route since we pass the steam_ids as query param, though since we are saving the user data in a database this could be justified (not sure)
+ * I think instead of passing the 'Median_abs_dev' document from the DB so the front end could do all the work we should
+ *  - Send a probability score in the response object for each player
+ *  - Send only the important information in the response we can avoid sending things
+ *      - all gun data (only send the important ones (maybe their best and their most suspicious for example))
+ *      - dont need to send owned_game data
+ *      - user_data 
+ *      - ban_record (maybe we keep)
+ * what we should send in the response object: 
+ *  - some game stats 
+ *      - their best guns
+ *          - highest accuracy  
+ *          - highest kill count 
+ *      - their most suspicious guns if any
+ *      - their z-score (overall) how sus they are   
+ *  - some steam info 
+ *      - profile url 
+ *      - profile image
+ *      - profile name
+ *      - steam level (often used to asses a players legitimacy) 
+ *      - ban record(maybe)
+*/
 router.post('/', async (req, res,next) => {
     try{
         const {body} = req; 
@@ -36,6 +80,11 @@ router.post('/', async (req, res,next) => {
         next(error); 
     }
 });
+
+/** 
+ * @todo Document this route
+ * The route seems to be for updating the median absolute deviation internally and should not be exposed to the public (perhaps this would operate on a schedule and does not need a route OR we have private routes we can call with authorization) 
+*/
 router.get('/', async(req,res,next)=>{
     try {
         const {body} = req; 
@@ -45,6 +94,11 @@ router.get('/', async(req,res,next)=>{
         next(error); 
     }
 })
+
+/** 
+ * @todo Document route
+ * This route seems to clean the database again should not be a public route and requires authorization 
+*/
 router.delete('/',async(req,res,next)=>{
     try{
         const {auth} = req.query; 
@@ -120,6 +174,10 @@ ScoreDeviationValue(x):
 */
 
 
+
+/** 
+ * @todo This function can be replaced with a library to do this for use 
+*/
 // responseFormat : example: {something that you want to parse:{}}
 //response:{players:[]}; 
 // in order to use this code we need to stuff it into a promise...
@@ -142,6 +200,14 @@ function createRequest(url){
         }
     })
 }
+
+
+/** 
+ * @todo document this function 
+ * Remove the callback ideology, since there is no reason to close the connection this process not only makes the entire application less efficient it also makes working with the data more tedious.  
+ * This function could be moved to (cwd/data/dbConfig.js) 
+ * remove console.logs statements when not in debug mode
+*/
 //                                  array     callback
 async function Aggregate_Database(aggregation,callback){
     console.log('this method was called'); 
@@ -153,6 +219,13 @@ async function Aggregate_Database(aggregation,callback){
       });
 }
 
+
+/** 
+ * @todo document this function 
+ * This function name is bad and long 
+ * this function seems to have a large hard coded schema type object for aggregating the database that we could use a schema validator for 
+ * this should be in a data directory (/api/steam/model.js)
+*/
 async function Get_All_User_Gun_Stats(callback){
             // this aggregation searches for only doccuments where the user has game stats.... 
             const aggregation = [
@@ -179,6 +252,13 @@ async function Get_All_User_Gun_Stats(callback){
             await Aggregate_Database(aggregation, callback)
 }
 
+
+/** 
+ * @todo Document function 
+ * This function is a helper function which allows for the developer to specify what they are trying to obtain from the database as well as what they want to project. 
+ * Remove the callback return the data. 
+ * This function is likely not valuable enough to keep as we are only combining two chainable functions and the return object type can be two an array or object which in undesirable 
+*/
 async function Query_Database(params,findOne,callBack,projection = {_id: 1, "Steam_Data":1}){
     const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
     await client.connect(async (err) => {
@@ -190,6 +270,12 @@ async function Query_Database(params,findOne,callBack,projection = {_id: 1, "Ste
       });
 }
 
+
+/** 
+ * @todo Document function
+ *  I think its valuable enough to rewrite this function properly not even sure what it does...   
+ * Since its not used maybe we just remove it. 
+*/
 async function UpdateStandardDeviation(){
     const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
     await client.connect(async (err) => {
@@ -225,6 +311,14 @@ async function UpdateStandardDeviation(){
 
 }
 
+
+/** 
+ * @todo Document this function 
+ * there is an array containing all of the gun ids (export that as a const in global state or somewhere else) 
+ * One thing that I am noticing is that there is a Median_Abs_deviation object in the db in the same collection as players collection. Separate these two collections as they aren't the same type of data or used the same way. 
+ * separate this function into the model file
+ * remove the callback
+*/
 async function Update_Median_Absolute_Deviations(callback){
     /*
         Struct:
@@ -266,10 +360,20 @@ async function Update_Median_Absolute_Deviations(callback){
    })
 }
 
+
+/** 
+ * @todo Remove this function 
+ * as this helper function only does one thing there is no reason to have it. `WE CONVERTED A 1 LINER INTO A 1 LINER`
+*/
 async function Query_DB_By_SteamId(steamid,callBack){
     await Query_Database({_id:steamid},true,callBack)
 }
 
+
+/** 
+ * @todo Document function
+ * again we should remove the global payload object  
+*/
 async function Insert_All_Steam_Users_From_Payload(payload){
     let keys = Object.keys(payload);
     let playerArrayForInsertion = []
@@ -287,6 +391,11 @@ async function Insert_All_Steam_Users_From_Payload(payload){
       }); 
 }
 
+
+/** 
+ * @todo Document this function 
+ *  
+*/
 async function Delete_All_entries_From_Database(){
     const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
     await client.connect(async (err) => {
@@ -296,15 +405,25 @@ async function Delete_All_entries_From_Database(){
       }); 
 }
 
-
+/** 
+ * @todo Remove this function  
+*/
 async function Get_Vac_Banned_Players_Steamids(callBack){
     await(Query_Database({"Steam_Data.user_vac_ban":false},false,callBack,{"Steam_Data":0}))
 }
 
+
+/** 
+ * @todo Remove this function  
+*/
 async function Get_All_Steam_Ids_From_Database(callBack){
     await Query_Database({'Steam_Data':{$exists:true}},false,callBack,{"Steam_Data":0})
 }
 
+
+/** 
+ * @todo Remove this function We should act on the collection directly 
+*/
 async function Update_One(updateVal){
     const client = await MongoClient.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
     await client.connect(async (err) => {
@@ -314,6 +433,12 @@ async function Update_One(updateVal){
   }); 
 }
 
+
+/** 
+ * @todo document this function 
+ * this function gets all of the users from the database and updates them after calling the steam api that many times
+ * we might want to rewrite this function to make it more efficient 
+*/
 async function Update_All_Users(steamids){
     const numOfArrays = Math.ceil(steamids.length/100)
     console.log(numOfArrays); 
@@ -325,6 +450,11 @@ async function Update_All_Users(steamids){
     }
 }
 
+
+/** 
+ * @todo Document this function 
+ * This wrapper function calls all of the important functions regarding the steam_ids passed as a query param 
+*/
 async function handleSteamAPICalls(steamids){
     initializePayload(steamids); 
     await getUsersStatsFromGame(steamids);
@@ -336,6 +466,11 @@ async function handleSteamAPICalls(steamids){
     // this method calls each api in order each after the last has completed...
 }
 
+
+/** 
+ * @todo document function
+ * This idea of having a payload that contains all of the user data is needed but is there a way to separate the needed data (for the database) and the non needed data (for the client)  
+*/
 function initializePayload(steamids){
     payload = {}
     payload['Median_abs_dev'] = {}
@@ -351,12 +486,21 @@ function initializePayload(steamids){
     })
 }
 
+
+/** 
+ * @todo document function 
+ * rename this function its more of a `setter` function so we could call it set...
+*/
 async function getUsersStatsFromGame(steamids){
     for(let i = 0; i < steamids.length; i++){
             payload[steamids[i]]['user_game_stats'] = await getUserStatsFromGame(steamids[i]); 
     }
 }
 
+/** 
+ * @todo document function 
+ * rename this function its more of a `setter` function so we could call it set...
+*/
 async function getUsersHoursPlayed(steamids){
     for(let i = 0; i < steamids.length; i++){
         if(!payload[steamids[i]]){payload[steamids[i]]={}}
@@ -364,6 +508,11 @@ async function getUsersHoursPlayed(steamids){
     }
 }
 
+/** 
+ * @todo document function 
+ * rename this function its more of a `setter` function so we could call it set...
+ * one thing to note is that this function only makes a single call to the STEAM WEB API. We need to maintain this aspect to avoid unnecessary calls 
+*/
 async function getUsersBanRecord(steamids){
     let arr = await getUserBanRecord(steamids); 
     arr.forEach((val)=>{
@@ -376,12 +525,22 @@ async function getUsersBanRecord(steamids){
     })
 }
 
+/** 
+ * @todo document function 
+ * This function calls a helper function that does some parsing of the response object, the parser is responsible for inserting into the payload which I think is bad design. 
+ * rename this function its more of a `setter` function so we could call it set...
+ * one thing to note is that this function only makes a single call to the STEAM WEB API. We need to maintain this aspect to avoid unnecessary calls 
+*/
 async function getUsersData (steamids){
     const URL = `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${key}&&steamids=${steamids}`
     const steamUsersData = await createRequest(URL); 
     parseUserData(steamUsersData,payload); 
 }
 
+/** 
+ * @todo document function 
+ * rename this function its more of a `setter` function so we could call it set...
+*/
 async function getUsersSteamLevel(steamids){
     for(let i = 0; i < steamids.length; i++){
         if(!payload[steamids[i]]){payload[steamids[i]]={}}
@@ -390,6 +549,11 @@ async function getUsersSteamLevel(steamids){
     }
 }
 
+
+/** 
+ * @todo document function
+ * This function parses a response from the steam api and removes all sorts of useless tags and is responsible for storing each player in the payload. Remove that functionality 
+*/
 function parseUserData(response){
     const keysToRemove = ['lastlogoff','commentpermission','avatarmedium','avatarfull','avatarhash','personastate','realname','primaryclanid','personastateflags','loccountrycode','locstatecode','loccityid']
     const SteamResponsePlayerArray = response['response']['players']; 
@@ -406,6 +570,12 @@ function parseUserData(response){
     })
 }
 
+
+/** 
+ * @todo document function
+ * Remove the `createRequest` call replace with a library
+ * Calls a parser function then returns the parsed data (weird cause most the time I dont return data but instead use a callback or insert data directly... Perhaps I was starting to get it) 
+*/
 async function getUserStatsFromGame(steamid){
     const URL = 'https://api.steampowered.com/ISteamUserStats/GetUserStatsForGame/v2/'
     const appID = '000730'
@@ -414,6 +584,11 @@ async function getUserStatsFromGame(steamid){
     return parsedJSON; 
 }
 
+/** 
+ * @todo Document function
+ * removed unused vars 
+ * perhaps there is a better method to parsing these response objects (maybe a schema validator or something) 
+*/
 function parseUserStatsFromGame(userStatsFromGame){
     const keys = (Object.keys(userStatsFromGame))
     if(keys.includes('status')){
@@ -431,15 +606,27 @@ function parseUserStatsFromGame(userStatsFromGame){
     return parsedUserStats; 
 }
 
+/** 
+ * @todo Document function
+ * Seems like we could handle this without this method again using a schema validator type beat 
+*/
 function parseAchievments(ach){
     const achievmentCount = Object.keys(ach['playerstats']['achievements']).length;
     return achievmentCount; 
 }
 
+/** 
+ * @todo Document function
+ * Seems like we could handle this without this method again using a schema validator type beat 
+*/
 function parseSteamidFromUserStats(userStatsFromGame){
     return userStatsFromGame['playerstats']['steamID'];
 }
 
+/** 
+ * @todo Document function
+ * Seems like we could handle this without this method again using a schema validator type beat 
+*/
 function parseLastMatch(userStatsFromGame){
     const lastMatchData = {}; 
     Object.keys(userStatsFromGame['playerstats']['stats']).forEach((userStat)=>{
@@ -450,6 +637,12 @@ function parseLastMatch(userStatsFromGame){
     return lastMatchData; 
 }
 
+
+/** 
+ * @todo document function
+ * This function again uses a large list of constant data we should extract into a global or somewhere else as a CONST 
+ * this function also does the calculation to find normalized gun data so perhaps we could extract that functionality into a helper function because it does some calculation
+*/
 function parseGeneralMatchData(userStatsFromGame){
     const tempRef = userStatsFromGame['playerstats']['stats']
     const generalMatchData = {}; 
@@ -478,6 +671,10 @@ function parseGeneralMatchData(userStatsFromGame){
     return generalMatchData; 
 }
 
+
+/** 
+ * @todo function could easily be replaced with a find function 
+*/
 function getStatIndex(statsList,name){
     let statIndex = 0; 
     statsList.forEach((stat,index)=>{
@@ -488,6 +685,11 @@ function getStatIndex(statsList,name){
     return statIndex; 
 }
 
+
+/** 
+ * @todo document function
+ * calls a parser function perhaps we don't need that 
+*/
 async function getUserBanRecord(steamids){ // only call once with all steam ids 
     // const maxsteamids = 
     const maxSteamids = 100; 
@@ -496,16 +698,27 @@ async function getUserBanRecord(steamids){ // only call once with all steam ids
     return parseUserBanRecord(response); 
 }
 
+/** 
+ * @todo we do not need this function  
+*/
 function parseUserBanRecord(res){
     return res['players']; 
 }
 
+
+/** 
+ * @todo document function
+ * calls a parser function perhaps we don't need that 
+*/
 async function getUserSteamLevel(steamid){
     const URL = 'https://api.steampowered.com/IPlayerService/GetSteamLevel/v1/'
     const response = await createRequest(`${URL}?key=${key}&steamid=${(steamid)}`)
     return parseUserSteamLevel(response); 
 }
 
+/** 
+ * @todo remove this function implement error handling in some other way 
+*/
 function parseUserSteamLevel(res){
     if(res['response']){
         return res['response']['player_level']
@@ -513,6 +726,11 @@ function parseUserSteamLevel(res){
     return {}; 
 }
 
+
+/** 
+ * @todo document function
+ * uses parser perhaps we don't need that 
+*/
 async function getUserHoursPlayed(steamid){
     const URL = 'https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/'
     console.log(steamid)
@@ -520,6 +738,10 @@ async function getUserHoursPlayed(steamid){
     return parseHoursPlayed(response); 
 }
 
+/** 
+ * @todo document function 
+ * try to avoid using all parser functions in replacement with a json parser or schema validator  
+*/
 function parseHoursPlayed(res){
     if(res['response']['games']){
         const userGamesOwned = res['response']['game_count'];
@@ -534,6 +756,10 @@ function parseHoursPlayed(res){
     return {}
 }
 
+
+/** 
+ * @todo remove unused function 
+*/
 function parseSteamIDs(str){
     const splitBySpace = str.split(' '); 
     const steamIDs = splitBySpace.filter(val=>{
@@ -542,6 +768,9 @@ function parseSteamIDs(str){
     return steamIDs; 
 }
 
+/** 
+ * @todo remove unused function 
+*/
 function steamIDtosteam64(steamid){
     const parsed = steamid.split(':'); 
     const x = parsed[1]; 
